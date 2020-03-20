@@ -1,27 +1,21 @@
 #include "AtOsal.h"
+#include "ATCliAPI.h"
 
 
-void cliAppDeviceInit()
-{
-	printf("cliAppDeviceInit\n");
-}
-void CmdCliClientExit()
-{
-	printf("CmdCliClientExit\n");
-}
-int clish_shell_builtin_cmp(char *cmd, clish_shell_builtin_t *b)
-{
-	//printf("%s %s %d\n", cmd, b->name, strcmp(cmd, b->name));
-	return strcmp(cmd, b->name);
-}
 clish_shell_builtin_t ALLCLISHCMD_LIST[] = 
 {
-	DEF_SDKCOMMAND_CLISHBUILTIN("close shell", CmdCliClientExit),
-	DEF_SDKCOMMAND_CLISHBUILTIN("device init", cliAppDeviceInit),
+  DEF_SDKCOMMAND_CLISHBUILTIN("close shell", CmdCliClientExit),
+  DEF_SDKCOMMAND_CLISHBUILTIN("device init", cliAppDeviceInit),
+  DEF_SDKCOMMAND_CLISHBUILTIN("exit", CmdCliClientExit),
 };
-#define AT_RL_BUFSIZE 1024
 
-char *ATReadLine()
+
+static int clish_shell_builtin_cmp(char *cmd, clish_shell_builtin_t *b)
+{
+	return strcmp(cmd, b->name);
+}
+
+static char *ATReadLine()
 {
    int bufsize = AT_RL_BUFSIZE;
    int position = 0;
@@ -58,21 +52,18 @@ char *ATReadLine()
          bufsize += AT_RL_BUFSIZE;
          buffer = realloc(buffer, bufsize);
          if (!buffer) {
-            fprintf(stderr, "NA: allocation error\n");
+            fprintf(stderr, "AT: allocation error\n");
             exit(EXIT_FAILURE);
          }
       }
   }
 }
-
-#define AT_TOK_BUFSIZE 64
-#define AT_TOK_DELIM " \t\r\n\a"
 /**
    @brief Split a line into tokens (very naively).
    @param line The line.
    @return Null-terminated array of tokens.
  */
-char **ATSplitLine(char *line)
+static char **ATSplitLine(char *line)
 {
   int bufsize = AT_TOK_BUFSIZE, position = 0;
   char **tokens = malloc(bufsize * sizeof(char*));
@@ -80,7 +71,7 @@ char **ATSplitLine(char *line)
 
   if (!tokens) 
   {
-    fprintf(stderr, "NA: allocation error\n");
+    fprintf(stderr, "AT: allocation error\n");
     exit(EXIT_FAILURE);
   }
 
@@ -98,7 +89,7 @@ char **ATSplitLine(char *line)
          if (!tokens) 
          {
             free(tokens_backup);
-            fprintf(stderr, "NA: allocation error\n");
+            fprintf(stderr, "AT: allocation error\n");
             exit(EXIT_FAILURE);
          }
       }
@@ -110,35 +101,37 @@ char **ATSplitLine(char *line)
    return tokens;
 }
 
-int ATExecute(char *args)
+static int ATExecute(char *args)
 {
 
-	clish_shell_builtin_t *item = (clish_shell_builtin_t*) bsearch (args, ALLCLISHCMD_LIST, 
-		2, sizeof (struct clish_shell_builtin), (int(*)(const void*,const void*))clish_shell_builtin_cmp);
-	item->callback();
-	//printf("%s\n", args);
-	return 1;
+	clish_shell_builtin_t *item;
+  item = (clish_shell_builtin_t*) bsearch (args, ALLCLISHCMD_LIST, 
+		3, sizeof (struct clish_shell_builtin), (int(*)(const void*,const void*))clish_shell_builtin_cmp);
+	if (item == NULL)
+  {
+    return CmdCliClientDefault();
+  }
+	return item->callback();
 }
 
 
 void ATCliStart(void)
 {
-    char *line = NULL;
-    char **args = NULL;
-    int status;
+  char *line = NULL;
+  char **args = NULL;
+  int status = 0;
 
-    do
-    {
-        printf("> ");
-        line = ATReadLine();
-        //printf("%s\n", line);
-        //args = ATSplitLine(line);
-        status = ATExecute(line);
+  do
+  {
+    printf("AT > ");
+      line = ATReadLine();
+      //args = ATSplitLine(line);
+      status = ATExecute(line);
 
-
-        if (line)
-        	free(line);
-        if (args)
-        	free(args);
+      if (line)
+        free(line);
+      if (args)
+        free(args);
     } while (status);
+
 }
